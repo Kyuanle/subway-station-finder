@@ -117,6 +117,7 @@
             let service;
             let infowindow;
             let autocomplete;
+            let markers = []; // 用於存儲所有標記
             const WALKING_SPEED = 83; // 每分鐘83米
 
             function initMap() {
@@ -146,8 +147,21 @@
                 }
             }
 
+            function clearResults() {
+                // 清除地圖上的所有標記
+                for (let i = 0; i < markers.length; i++) {
+                    markers[i].setMap(null);
+                }
+                markers = [];
+
+                // 清除結果列表
+                const resultsDiv = document.getElementById("results");
+                resultsDiv.innerHTML = "";
+            }
+
             function findNearbyStations() {
                 try {
+                    clearResults(); // 清除先前的結果
                     const place = autocomplete.getPlace();
                     if (!place.geometry) {
                         throw new Error("未選擇有效地址");
@@ -155,11 +169,12 @@
 
                     const location = place.geometry.location;
                     map.setCenter(location);
-                    new google.maps.Marker({
+                    const userMarker = new google.maps.Marker({
                         map: map,
                         position: location,
                         icon: "http://maps.google.com/mapfiles/ms/icons/red-dot.png",
                     });
+                    markers.push(userMarker);
 
                     const request = {
                         location: location,
@@ -238,6 +253,7 @@
                     position: place.geometry.location,
                     icon: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png",
                 });
+                markers.push(marker);
 
                 google.maps.event.addListener(marker, "click", () => {
                     infowindow.setContent(place.name);
