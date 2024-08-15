@@ -4,6 +4,10 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>尋找一公里內的地鐵站</title>
+        <link
+            rel="stylesheet"
+            href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
+        />
         <style>
             body {
                 font-family: Arial, sans-serif;
@@ -75,6 +79,10 @@
                 margin-bottom: 10px;
                 font-size: 14px;
             }
+            .material-symbols-outlined {
+                vertical-align: middle;
+                margin-right: 5px;
+            }
             @media (max-width: 600px) {
                 body {
                     padding: 5px;
@@ -103,7 +111,10 @@
             <div id="locationField">
                 <input id="autocomplete" placeholder="輸入地址或地標" type="text" />
             </div>
-            <button onclick="findNearbyStations()">查找一公里內的地鐵站</button>
+            <button onclick="findNearbyStations()">
+                <span class="material-symbols-outlined">search</span>
+                查找一公里內的地鐵站
+            </button>
             <div id="map"></div>
             <div id="results"></div>
         </div>
@@ -138,7 +149,7 @@
                     infowindow = new google.maps.InfoWindow();
 
                     autocomplete = new google.maps.places.Autocomplete(document.getElementById("autocomplete"), {
-                        types: ["establishment"],
+                        types: ["geocode", "establishment"],
                     });
                     autocomplete.bindTo("bounds", map);
                 } catch (error) {
@@ -148,13 +159,10 @@
             }
 
             function clearResults() {
-                // 清除地圖上的所有標記
                 for (let i = 0; i < markers.length; i++) {
                     markers[i].setMap(null);
                 }
                 markers = [];
-
-                // 清除結果列表
                 const resultsDiv = document.getElementById("results");
                 resultsDiv.innerHTML = "";
             }
@@ -163,46 +171,53 @@
                 try {
                     clearResults(); // 清除先前的結果
                     const place = autocomplete.getPlace();
-                    if (!place.geometry) {
-                        throw new Error("未選擇有效地址");
+                    let location;
+
+                    if (place && place.geometry) {
+                        location = place.geometry.location;
+                        processLocation(location);
+                    } else {
+                        // 如果沒有選擇地點，嘗試使用地理編碼服務
+                        const geocoder = new google.maps.Geocoder();
+                        const address = document.getElementById("autocomplete").value;
+                        
+                        geocoder.geocode({ address: address }, function(results, status) {
+                            if (status === google.maps.GeocoderStatus.OK) {
+                                location = results[0].geometry.location;
+                                processLocation(location);
+                            } else {
+                                displayNoResults("無法找到該地址");
+                            }
+                        });
                     }
-
-                    const location = place.geometry.location;
-                    map.setCenter(location);
-                    const userMarker = new google.maps.Marker({
-                        map: map,
-                        position: location,
-                        icon: "http://maps.google.com/mapfiles/ms/icons/red-dot.png",
-                    });
-                    markers.push(userMarker);
-
-                    const request = {
-                        location: location,
-                        radius: "1000", // 1公里 = 1000米
-                        type: ["subway_station"],
-                    };
-
-                    service.nearbySearch(request, (results, status) => {
-                        if (status === google.maps.places.PlacesServiceStatus.OK) {
-                            displayResults(results, location);
-                        } else {
-                            displayNoResults();
-                        }
-                    });
                 } catch (error) {
                     console.error("查找地鐵站時發生錯誤:", error);
-                    alert("發生錯誤: " + error.message);
+                    displayNoResults("發生錯誤: " + error.message);
                 }
+            }
+
+            function processLocation(location) {
+                map.setCenter(location);
+                createMarker({ geometry: { location: location }, name: "您的位置" }, true);
+
+                const request = {
+                    location: location,
+                    radius: "1000", // 1公里 = 1000米
+                    type: ["subway_station"],
+                };
+
+                service.nearbySearch(request, (results, status) => {
+                    if (status === google.maps.places.PlacesServiceStatus.OK && results.length > 0) {
+                        displayResults(results, location);
+                    } else {
+                        displayNoResults("一公里內沒有地鐵站");
+                    }
+                });
             }
 
             function displayResults(places, userLocation) {
                 const resultsDiv = document.getElementById("results");
-                if (places.length === 0) {
-                    displayNoResults();
-                    return;
-                }
-
-                resultsDiv.innerHTML = "<h3>附近的地鐵站：</h3>";
+                resultsDiv.innerHTML = "<h3><span class='material-symbols-outlined'>train</span>附近的地鐵站：</h3>";
                 let bounds = new google.maps.LatLngBounds();
                 bounds.extend(userLocation);
 
@@ -230,33 +245,43 @@
 
                     resultsDiv.innerHTML += `
                 <p>
-                    <strong>${places[i].name}</strong><br>
-                    距離: ${(distance / 1000).toFixed(2)} 公里<br>
-                    步行時間: 約 ${walkingTime} 分鐘
+                    <strong><span class='material-symbols-outlined'>train</span>${places[i].name}</strong><br>
+                    <span class='material-symbols-outlined'>distance</span>距離: ${(distance / 1000).toFixed(
+                        2
+                    )} 公里<br>
+                    <span class='material-symbols-outlined'>directions_walk</span>步行時間: 約 ${walkingTime} 分鐘
                 </p>`;
                 }
 
                 map.fitBounds(bounds);
             }
 
-            function displayNoResults() {
+            function displayNoResults(message) {
                 const resultsDiv = document.getElementById("results");
-                resultsDiv.innerHTML = "<h3>一公里內沒有地鐵站</h3>";
-
-                // 調整地圖縮放級別以顯示更大範圍
+                resultsDiv.innerHTML = `<h3><span class='material-symbols-outlined'>info</span>${message}</h3>`;
                 map.setZoom(14);
             }
 
-            function createMarker(place) {
+            function createMarker(place, isUserLocation = false) {
+                const icon = {
+                    url: isUserLocation 
+                        ? "https://maps.google.com/mapfiles/ms/icons/red-dot.png" 
+                        : "https://maps.google.com/mapfiles/ms/icons/blue-dot.png",
+                    scaledSize: new google.maps.Size(32, 32),
+                    origin: new google.maps.Point(0, 0),
+                    anchor: new google.maps.Point(16, 32)
+                };
+
                 const marker = new google.maps.Marker({
                     map: map,
                     position: place.geometry.location,
-                    icon: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png",
+                    icon: icon,
+                    title: place.name || "您的位置",
                 });
                 markers.push(marker);
 
                 google.maps.event.addListener(marker, "click", () => {
-                    infowindow.setContent(place.name);
+                    infowindow.setContent(marker.getTitle());
                     infowindow.open(map, marker);
                 });
             }
