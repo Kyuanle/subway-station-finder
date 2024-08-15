@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>尋找一公里內的地鐵站</title>
+        <style>
+            #map {
+                height: 400px;
+                width: 100%;
+            }
+            #results {
+                margin-top: 20px;
+            }
+            #locationField {
+                width: 100%;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="locationField">
+            <input id="autocomplete" placeholder="輸入地址" type="text" style="width: 50%" />
+        </div>
+        <button onclick="findNearbyStations()">查找一公里內的地鐵站</button>
+        <div id="map"></div>
+        <div id="results"></div>
+
+        <script>
+            let map;
+            let service;
+            let infowindow;
+            let autocomplete;
+            const WALKING_SPEED = 83; // 每分鐘83米
+
+            function initMap() {
+                map = new google.maps.Map(document.getElementById("map"), {
+                    center: { lat: 25.033, lng: 121.565 }, // 台北市中心
+                    zoom: 14,
+                });
+                service = new google.maps.places.PlacesService(map);
+                infowindow = new google.maps.InfoWindow();
+
+                // 初始化 Autocomplete
+                autocomplete = new google.maps.places.Autocomplete(document.getElementById("autocomplete"), {
+                    types: ["establishment"],
+                });
+                autocomplete.bindTo("bounds", map);
+            }
+
+            function findNearbyStations() {
+                const place = autocomplete.getPlace();
+                if (!place.geometry) {
+                    alert("未選擇有效地址,請從下拉列表中選擇一個地址。");
+                    return;
+                }
+
+                const location = place.geometry.location;
+                map.setCenter(location);
+                new google.maps.Marker({
+                    map: map,
+                    position: location,
+                    icon: "http://maps.google.com/mapfiles/ms/icons/red-dot.png",
+                });
+
+                const request = {
+                    location: location,
+                    radius: "1000", // 1公里 = 1000米
+                    type: ["subway_station"],
+                };
+
+                service.nearbySearch(request, (results, status) => {
+                    if (status === google.maps.places.PlacesServiceStatus.OK) {
+                        displayResults(results, location);
+                    }
+                });
+            }
+
+            function displayResults(places, userLocation) {
+                const resultsDiv = document.getElementById("results");
+                resultsDiv.innerHTML = "<h3>附近的地鐵站：</h3>";
+                let bounds = new google.maps.LatLngBounds();
+                bounds.extend(userLocation);
+
+                places.sort((a, b) => {
+                    const distanceA = google.maps.geometry.spherical.computeDistanceBetween(
+                        userLocation,
+                        a.geometry.location
+                    );
+                    const distanceB = google.maps.geometry.spherical.computeDistanceBetween(
+                        userLocation,
+                        b.geometry.location
+                    );
+                    return distanceA - distanceB;
+                });
+
+                for (let i = 0; i < places.length; i++) {
+                    createMarker(places[i]);
+                    bounds.extend(places[i].geometry.location);
+
+                    const distance = google.maps.geometry.spherical.computeDistanceBetween(
+                        userLocation,
+                        places[i].geometry.location
+                    );
+                    const walkingTime = Math.round(distance / WALKING_SPEED);
+
+                    resultsDiv.innerHTML += `
+                    <p>
+                        <strong>${places[i].name}</strong><br>
+                        距離: ${(distance / 1000).toFixed(2)} 公里<br>
+                        步行時間: 約 ${walkingTime} 分鐘
+                    </p>`;
+                }
+
+                map.fitBounds(bounds);
+            }
+
+            function createMarker(place) {
+                const marker = new google.maps.Marker({
+                    map: map,
+                    position: place.geometry.location,
+                    icon: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png",
+                });
+
+                google.maps.event.addListener(marker, "click", () => {
+                    infowindow.setContent(place.name);
+                    infowindow.open(map, marker);
+                });
+            }
+        </script>
+        <script
+            src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBEV0Yiytp6xxvKeIT4KYsBpflGn2qPbAo&libraries=places,geometry&callback=initMap"
+            async
+            defer
+        ></script>
+    </body>
+</html>
