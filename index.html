@@ -83,6 +83,18 @@
                 vertical-align: middle;
                 margin-right: 5px;
             }
+            #place-info {
+                margin-top: 15px;
+                padding: 10px;
+                background-color: #e9e9e9;
+                border-radius: 8px;
+            }
+            .review {
+                background-color: #fff;
+                padding: 10px;
+                margin-bottom: 10px;
+                border-radius: 4px;
+            }
             @media (max-width: 600px) {
                 body {
                     padding: 5px;
@@ -116,6 +128,7 @@
                 查找一公里內的地鐵站
             </button>
             <div id="map"></div>
+            <div id="place-info"></div>
             <div id="results"></div>
         </div>
 
@@ -175,7 +188,7 @@
 
                     if (place && place.geometry) {
                         location = place.geometry.location;
-                        processLocation(location);
+                        processLocation(location, place);
                     } else {
                         // 如果沒有選擇地點，嘗試使用地理編碼服務
                         const geocoder = new google.maps.Geocoder();
@@ -184,7 +197,7 @@
                         geocoder.geocode({ address: address }, function(results, status) {
                             if (status === google.maps.GeocoderStatus.OK) {
                                 location = results[0].geometry.location;
-                                processLocation(location);
+                                getPlaceDetails(results[0].place_id, location);
                             } else {
                                 displayNoResults("無法找到該地址");
                             }
@@ -196,9 +209,28 @@
                 }
             }
 
-            function processLocation(location) {
+            function getPlaceDetails(placeId, location) {
+                const request = {
+                    placeId: placeId,
+                    fields: ['name', 'rating', 'formatted_address', 'geometry', 'reviews']
+                };
+
+                service.getDetails(request, (place, status) => {
+                    if (status === google.maps.places.PlacesServiceStatus.OK) {
+                        processLocation(location, place);
+                    } else {
+                        processLocation(location);
+                    }
+                });
+            }
+
+            function processLocation(location, place = null) {
                 map.setCenter(location);
                 createMarker({ geometry: { location: location }, name: "您的位置" }, true);
+
+                if (place) {
+                    displayPlaceInfo(place);
+                }
 
                 const request = {
                     location: location,
@@ -213,6 +245,33 @@
                         displayNoResults("一公里內沒有地鐵站");
                     }
                 });
+            }
+
+            function displayPlaceInfo(place) {
+                const placeInfoDiv = document.getElementById("place-info");
+                let reviewsHtml = '';
+                if (place.reviews && place.reviews.length > 0) {
+                    reviewsHtml = '<h4>評論：</h4>';
+                    place.reviews.forEach(review => {
+                        reviewsHtml += `
+                            <div class="review">
+                                <strong>${review.author_name}</strong> - ${review.rating} / 5<br>
+                                <p>${review.text}</p>
+                                <small>發布時間：${new Date(review.time * 1000).toLocaleString()}</small>
+                            </div>
+                        `;
+                    });
+                }
+
+                placeInfoDiv.innerHTML = `
+                    <h3><span class='material-symbols-outlined'>place</span>地點信息：</h3>
+                    <p>
+                        <strong>${place.name || "未知地點"}</strong><br>
+                        地址: ${place.formatted_address || "未知地址"}<br>
+                        評分: ${place.rating ? place.rating.toFixed(1) + " / 5" : "無評分"}
+                    </p>
+                    ${reviewsHtml}
+                `;
             }
 
             function displayResults(places, userLocation) {
